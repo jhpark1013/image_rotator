@@ -256,11 +256,27 @@ reg	[4:0]	sendBlockCounterX, sendBlockCounterY;
   reg	[4:0]		axiFSM_currentState;
   reg	[4:0]		axiFSM_prevState;
   reg	[7:0]		axiFSM_readRequestCounter;
-  reg 	[7:0]		axiFSM_writeRequestCounter;
+  reg [7:0]		axiFSM_writeRequestCounter;
 
   reg ip2bus_mstrd_req;
   reg ip2bus_mstwr_req;
   reg ip2bus_mst_addr;
+
+  reg bus2ip_mst_cmdack;
+  reg bus2ip_mst_cmplt;
+
+  reg axi_readAddress_offset;
+  reg axi_readAddress_numberOfPassedLines;
+  reg axi_readAddress_numberOfPassedPixelsInCurrentLine;
+  reg axi_readAddress_numberOfPassedPixels;
+
+  reg RotationType;
+
+  reg axi_writeAddress_copy_offset;
+  reg axi_writeAddress_horiz_offset;
+  reg axi_writeAddress_vert_offset;
+  // reg axi_writeAddress_clockwise_offset;
+  // reg axi_writeAddress_counter_clockwise_offset;
 
   always_ff @(posedge Clk)
     if(!ResetL) begin
@@ -273,7 +289,186 @@ reg	[4:0]	sendBlockCounterX, sendBlockCounterY;
       ip2bus_mst_addr <= 0;
       axiFSM_readRequestCounter <= 0;
       axiFSM_writeRequestCounter <= 0;
+
+      // generate read address to read the pixels
+      assign axi_readAddress_numberOfPassedLines = receiveBlockCounterX * `IMAGE_BLOCK_SIZE
+        + axiFSM_readRequestCounter ;
+      assign axi_readAddress_numberOfPassedPixelsInCurrentLine = receiveBlockCounterX
+        * `IMAGE_BLOCK_SIZE ;
+      assign axi_readAddress_numberOfPassedPixels = axi_readAddress_numberOfPassedPixelsInCurrentLine
+        + axi_readAddress_numberOfPassedLines;
+      assign axi_readAddress_offset = axi_readAddress_numberOfPassedPixels * `IMAGE_NO_BYTES_PER_PIXEL;
+
+      assign bus2ip_mst_cmdack = 1;
+      assign bus2ip_mst_cmplt = 1;
+      assign RotationType = 0;
+
+      // generate write address when doing only a block copy operation
+      assign axi_writeAddress_copy_offset = (RotationType == `ROTATION_CMD_COPY)?1:0;
+            // (`IMAGE_BLOCK_SIZE * NumberOf120PixelsBlocks_X) : 0;
+      // (RotationType == `ROTATION_CMD_COPY)?
+      //   (sendBlockCounterY * `IMAGE_BLOCK_SIZE + axiFSM_writeRequestCounter) : 0 ;
+      assign axi_writeAddress_horiz_offset = (RotationType == `ROTATION_CMD_HORIZ_FLIP)?
+            (`IMAGE_BLOCK_SIZE * NumberOf120PixelsBlocks_X) : 0;
+      // (RotationType == `ROTATION_CMD_HORIZ_FLIP)?
+      //   (axi_writeAddress_horiz_numberOfPassedPixels * `IMAGE_NO_BYTES_PER_PIXEL) : 0;
+      assign axi_writeAddress_vert_offset = axi_writeAddress_copy_offset;
+      // axi_writeAddress_clockwise_offset;
+      // axi_writeAddress_counter_clockwise_offset;
     end
+
+    else begin
+  		case ( axiFSM_currentState )
+  		`AXI_FSM_IDLE : begin
+  			if ( (mainFSM_currentState == `FSM_RECEIEVE_BLOCK) && (mainFSM_prevState == `FSM_IDLE) ) begin
+  				axiFSM_currentState <= `AXI_FSM_SEND_READ_REQUEST1;
+  				axiFSM_prevState <= `AXI_FSM_IDLE;
+
+  				axiFSM_readRequestCounter <= 0;
+  			end
+  			else if ( (mainFSM_currentState == `FSM_RECEIEVE_BLOCK) && (mainFSM_prevState == `FSM_SEND_BLOCK) ) begin
+  				axiFSM_currentState <= `AXI_FSM_SEND_READ_REQUEST1;
+  				axiFSM_prevState <= `AXI_FSM_IDLE;
+
+  				axiFSM_readRequestCounter <= 0;
+  			end
+  			else if ( (mainFSM_currentState == `FSM_SEND_BLOCK) && (mainFSM_prevState == `FSM_RECEIEVE_BLOCK) ) begin
+  				axiFSM_currentState <= `AXI_FSM_SEND_WRITE_REQUEST1;
+  				axiFSM_prevState <= `AXI_FSM_IDLE;
+
+  				axiFSM_writeRequestCounter <= 0;
+  			end
+  			else begin
+  				axiFSM_currentState <= `AXI_FSM_IDLE;
+  				axiFSM_prevState <= `AXI_FSM_IDLE;
+  			end
+
+  			axiMaster_blockReceived <= 0;
+  			axiMaster_blockSent <= 0;
+  		end
+  		/////////////////////////////////
+  		//
+  		// read req.
+  		//
+  		/////////////////////////////////
+  		`AXI_FSM_SEND_READ_REQUEST1: begin
+  			ip2bus_mstrd_req <= 1;
+  			ip2bus_mst_addr <= inputImageAddressR + axi_readAddress_offset;
+
+  			axiFSM_currentState <= `AXI_FSM_WAIT_FOR_READ_ACK1;
+  			axiFSM_prevState <= `AXI_FSM_SEND_READ_REQUEST1;
+  		end
+  		`AXI_FSM_WAIT_FOR_READ_ACK1: begin
+  			if ( bus2ip_mst_cmdack ) begin
+  				ip2bus_mstrd_req <= 0;
+
+  				axiFSM_currentState <= `AXI_FSM_WAIT_FOR_READ_CMPLT1;
+  				axiFSM_prevState <= `AXI_FSM_WAIT_FOR_READ_ACK1;
+  			end
+  			else begin
+  				ip2bus_mstrd_req <= ip2bus_mstrd_req;
+
+  				axiFSM_currentState <= `AXI_FSM_WAIT_FOR_READ_ACK1;
+  				axiFSM_prevState <= `AXI_FSM_WAIT_FOR_READ_ACK1;
+  			end
+  		end
+  		`AXI_FSM_WAIT_FOR_READ_CMPLT1: begin
+  			if ( bus2ip_mst_cmplt ) begin
+
+  				if ( axiFSM_readRequestCounter == (`IMAGE_BLOCK_SIZE-1) ) begin
+  					axiFSM_currentState <= `AXI_FSM_IDLE;
+  					axiFSM_prevState <= `AXI_FSM_WAIT_FOR_READ_CMPLT1;
+
+  					axiMaster_blockReceived <= 1;
+
+  				end
+  				else begin
+  					axiFSM_currentState <= `AXI_FSM_SEND_READ_REQUEST1;
+  					axiFSM_prevState <= `AXI_FSM_WAIT_FOR_READ_CMPLT1;
+
+  					axiMaster_blockReceived <= 0;
+  					axiFSM_readRequestCounter <= axiFSM_readRequestCounter + 1;
+  				end
+  			end
+  			else begin
+  				axiFSM_currentState <= `AXI_FSM_WAIT_FOR_READ_CMPLT1;
+  				axiFSM_prevState <= `AXI_FSM_WAIT_FOR_READ_CMPLT1;
+  			end
+  		end
+  		/////////////////////////////////
+  		//
+  		// write req. 1
+  		//
+  		/////////////////////////////////
+  		`AXI_FSM_SEND_WRITE_REQUEST1: begin
+  			ip2bus_mstwr_req <= 1;
+
+  			case ( RotationType )
+  				`ROTATION_CMD_COPY: begin
+  					ip2bus_mst_addr <= outputImageAddressR + axi_writeAddress_copy_offset;
+  				end
+  				`ROTATION_CMD_HORIZ_FLIP: begin
+  					ip2bus_mst_addr <= outputImageAddressR + axi_writeAddress_horiz_offset;
+  				end
+  				`ROTATION_CMD_VERT_FLIP: begin
+  					ip2bus_mst_addr <= outputImageAddressR + axi_writeAddress_vert_offset;
+  				end
+  				// `ROTATION_CMD_CLOCK_WISE: begin
+  				// 	ip2bus_mst_addr <= outputImageAddressR + axi_writeAddress_clockwise_offset;
+  				// end
+  				// `ROTATION_CMD_COUNTER_CLOCK_WISE: begin
+  				// 	ip2bus_mst_addr <= outputImageAddressR + axi_writeAddress_counter_clockwise_offset;
+  				// end
+  			endcase
+
+  			axiFSM_currentState <= `AXI_FSM_WAIT_FOR_WRITE_ACK1;
+  			axiFSM_prevState <= `AXI_FSM_SEND_WRITE_REQUEST1;
+  		end
+  		`AXI_FSM_WAIT_FOR_WRITE_ACK1: begin
+  			if ( bus2ip_mst_cmdack ) begin
+  				ip2bus_mstwr_req <= 0;
+
+  				axiFSM_currentState <= `AXI_FSM_WAIT_FOR_WRITE_CMPLT1;
+  				axiFSM_prevState <= `AXI_FSM_WAIT_FOR_WRITE_ACK1;
+  			end
+  			else begin
+  				ip2bus_mstwr_req <= ip2bus_mstwr_req;
+
+  				axiFSM_currentState <= `AXI_FSM_WAIT_FOR_WRITE_ACK1;
+  				axiFSM_prevState <= `AXI_FSM_WAIT_FOR_WRITE_ACK1;
+  			end
+  		end
+  		`AXI_FSM_WAIT_FOR_WRITE_CMPLT1: begin
+  			if ( bus2ip_mst_cmplt ) begin
+  				if ( axiFSM_writeRequestCounter == (`IMAGE_BLOCK_SIZE-1)) begin
+  					axiFSM_currentState <= `AXI_FSM_IDLE;
+  					axiFSM_prevState <= `AXI_FSM_WAIT_FOR_READ_CMPLT1;
+
+  					axiMaster_blockSent <= 1;
+  				end
+  				else begin
+  					axiFSM_currentState <= `AXI_FSM_SEND_WRITE_REQUEST1;
+  					axiFSM_prevState <= `AXI_FSM_WAIT_FOR_WRITE_CMPLT1;
+
+  					axiFSM_writeRequestCounter <= axiFSM_writeRequestCounter + 1;
+  				end
+  			end
+  			else begin
+  				axiFSM_currentState <= `AXI_FSM_WAIT_FOR_WRITE_CMPLT1;
+  				axiFSM_prevState <= `AXI_FSM_WAIT_FOR_WRITE_CMPLT1;
+  			end
+  		end
+  		/////////////////////////////////
+  		//
+  		// default
+  		//
+  		/////////////////////////////////
+  		default : begin
+  			axiFSM_currentState <= `AXI_FSM_IDLE;
+  			axiFSM_prevState <= `AXI_FSM_IDLE;
+  		end
+  		endcase
+  	end
 
 
 
