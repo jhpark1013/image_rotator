@@ -63,23 +63,93 @@ int sc_main(int argc, char* argv[]) {
 
     // Define interconnect
     sc_signal<bool> reset_l;
-    sc_signal<bool> M_AXIS_tvalid;
-    sc_signal<bool> M_AXIS_tready;
-    sc_signal<bool> M_AXIS_tlast;
-    sc_signal<vluint64_t> M_AXIS_tdata;
-    sc_signal<vluint64_t> in_quad;
+    // sc_signal<bool> ip2bus_mstrd_req;
+    // sc_signal<bool> ip2bus_mstwr_req;
+    // sc_signal<uint32_t> ip2bus_mst_addr;
+    // sc_signal<uint32_t> ip2bus_mst_length;
+    // sc_signal<uint32_t> ip2bus_mst_be;
+    // sc_signal<bool> ip2bus_mst_type;
+    // sc_signal<bool> ip2bus_mst_lock;
+    // sc_signal<bool> ip2bus_mst_reset;
+    //
+    // sc_signal<bool> bus2ip_mst_cmdack;
+    // sc_signal<bool> bus2ip_mst_cmplt;
+    //
+    sc_signal<uint32_t> InputImageAddress;
+    sc_signal<uint32_t> OutputImageAddress;
+    sc_signal<bool>  BeginRotation;
+    // sc_signal<bool>  RotationDone;
+    // // sc_signal<uint32_t>  RotationType;
+    // // sc_signal<uint32_t>  NumberOf120PixelsBlocks_X;
+    // // sc_signal<uint32_t>  NumberOf120PixelsBlocks_Y;
+    // // sc_signal<uint32_t> bus2ip_mstrd_rem;
+    //
+    //
+    // sc_signal<bool> bus2ip_mstrd_src_rdy_n;
+    // sc_signal<bool> bus2ip_mstrd_src_dsc_n;
+    // sc_signal<uint32_t>ip2bus_mstwr_rem;
+    // sc_signal<bool>ip2bus_mstwr_src_dsc_n;
+    // sc_signal<bool>bus2ip_mstwr_dst_rdy_n;
+    // sc_signal<bool>bus2ip_mstwr_dst_dsc_n;
+
+
 
     // Construct the Verilated model, from inside Vtop.h
     Vtop* top = new Vtop("top");
     // Attach signals to the model
     top->Clk       (clk);
-    top->ResetN   (reset_l);
+    top->ResetL   (reset_l);
 
-    top->M_AXIS_tvalid  (M_AXIS_tvalid);
-    top->M_AXIS_tready   (M_AXIS_tready);
-    top->M_AXIS_tlast   (M_AXIS_tlast);
-    top->M_AXIS_tdata (M_AXIS_tdata);
-    top->in_quad (in_quad);
+    // top->PIXEL_WIDTH(PIXEL_WIDTH),
+    //
+    // top->	ip2bus_mstrd_req(ip2bus_mstrd_req);
+    // top-> ip2bus_mstwr_req(ip2bus_mstwr_req);
+    // top-> ip2bus_mst_addr(ip2bus_mst_addr);
+    // top-> ip2bus_mst_length(ip2bus_mst_length);
+    // top-> ip2bus_mst_be(ip2bus_mst_be);
+    // top-> ip2bus_mst_type(ip2bus_mst_type);
+    // top-> ip2bus_mst_lock(ip2bus_mst_lock);
+    // top->ip2bus_mst_reset(ip2bus_mst_reset);
+    // // top-> ip2bus_mst_length(ip2bus_mst_length),
+    // // top-> ip2bus_mst_be(ip2bus_mst_be),
+    // // top-> ip2bus_mst_type(ip2bus_mst_type),
+    //
+    // // top->	ip2bus_mst_lock(ip2bus_mst_lock),
+    // // top->	ip2bus_mst_reset(ip2bus_mst_reset),
+    // top->	bus2ip_mst_cmdack(bus2ip_mst_cmdack);
+    // top->	bus2ip_mst_cmplt(bus2ip_mst_cmplt);
+    // // top->	bus2ip_mst_error(bus2ip_mst_error),
+    // // top->	bus2ip_mst_rearbitrate(bus2ip_mst_rearbitrate),
+    // // top->	bus2ip_mst_cmd_timeout(bus2ip_mst_cmd_timeout),
+    //
+    // // top->	bus2ip_mstrd_d(bus2ip_mstrd_d),
+    // top->	bus2ip_mstrd_rem(bus2ip_mstrd_rem);
+    // // top->	bus2ip_mstrd_sof_n(bus2ip_mstrd_sof_n),
+    // // top->	bus2ip_mstrd_eof_n(bus2ip_mstrd_eof_n),
+    // top->	bus2ip_mstrd_src_rdy_n(bus2ip_mstrd_src_rdy_n);
+    // top->	bus2ip_mstrd_src_dsc_n(bus2ip_mstrd_src_dsc_n);
+    // // top->	ip2bus_mstrd_dst_rdy_n(ip2bus_mstrd_dst_rdy_n),
+    // // top->	ip2bus_mstrd_dst_dsc_n(ip2bus_mstrd_dst_dsc_n),
+    // // top->	ip2bus_mstwr_d(ip2bus_mstwr_d),
+    // top->	ip2bus_mstwr_rem(ip2bus_mstwr_rem);
+    // // top->	ip2bus_mstwr_sof_n(ip2bus_mstwr_sof_n),
+    // // top->	ip2bus_mstwr_eof_n(ip2bus_mstwr_eof_n),
+    // // top->	ip2bus_mstwr_src_rdy_n(ip2bus_mstwr_src_rdy_n),
+    // top->	ip2bus_mstwr_src_dsc_n(ip2bus_mstwr_src_dsc_n);
+    // top->	bus2ip_mstwr_dst_rdy_n(bus2ip_mstwr_dst_rdy_n);
+    // top->	bus2ip_mstwr_dst_dsc_n(bus2ip_mstwr_dst_dsc_n);
+    //
+    top->	InputImageAddress(InputImageAddress);
+    top->	OutputImageAddress(OutputImageAddress);
+    top->	BeginRotation(BeginRotation);
+    // top->	RotationDone(RotationDone);
+    // // top->	RotationType(RotationType);
+    // // top->	NumberOf120PixelsBlocks_X(NumberOf120PixelsBlocks_X);
+    // // top->	NumberOf120PixelsBlocks_Y(NumberOf120PixelsBlocks_Y);
+    //
+    // // top->	StartPixel_X(StartPixel_X);
+    // // top->	StartPixel_Y(StartPixel_Y);
+    // // top->	NumberOfPixelsPerLine(NumberOfPixelsPerLine);
 
 
 #if VM_TRACE
