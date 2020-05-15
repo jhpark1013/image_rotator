@@ -43,9 +43,30 @@ To rotate the image in the FPGA, a few key components work together to efficient
 
 The hardware accelerator contains one key controller that contains the image processing instructions. The IP is broadly an image rotator block, but it should handle the multiple cases, agnostic to the size of the incoming data and the orientation of the resulting rotation. For example, 90 degree rotation the left or right and flips in the lateral or vertical dimensions should all be possible. (1) The four states of the finite state machine are, Idle, receive block, send block and end operation. 
 
+![](figures/main_fsm.png)
+
+Diagram shows the FSM for the image rotator which has four states: idle, receive, send and end. The default state is usually IDLE. From IDLE, the next logical step is the receive state where the system is ready to receive data. When the axi master receives the data, it is then ready to send. The axi master sends when the counter is equal to the 120 pixel block. 
+
+![](figures/axi_fsm.png)
+
 The master FSM coordinates receive and send actions. The axi master also has current state and previous states. There is also the read request counter, write request counter, block receive and block sent. The counter keeps track of the amount of information sent. When the data arrives and fills the allocated memory, axi sends a signal to notify it has received the data. Similarly the write request, after receiving and performing the image rotation, sends a write request to signal that it can send over the processed data.  
 
 Begin with initializing: when idle, the fsm “read request counter” and “write request counter” are 0. The “axi block received” and “sent signals” are also initialized to 0. (2) The AXI FSM’s “Receive” and “Sent” block counters count the blocks of 120x120px. Counters for receiving and writing the rotated image back.  
 Ports
 The AXI slave port is responsible for receiving the parameters (input image address, output image address, begin rotation, rotation type, etc) from the CPU. These are the parameters that are used for the acceleration types. The AXI master plug is the main controller. It accesses the DRAM memory, reading the pixels, giving the pixel values to the controller, then afterwards returning the processed data back to the DRAM by receiving the pixels from the controller and giving it back to the suitable address in the DRAM with a burst length of around 30 bytes each time. 
 Finally the controller has a set of plugs that go to master and a set of plugs that goes to the slave. It contains the block memory for storing the pixels and later retrieving them.
+
+IP interface ports in the image rotator top module
+The AXI slave burst port signals include the AXI4 write address channel signals, write channel signals, write response channel signals, read address channel signals, read data channel signals, and the user IP signals. This AXI4 write address bus gives the address of the first transfer in a write burst.  Then the write and read signals follow. 
+
+![](figures/pg158_axi_slave_burst.png)
+
+In this diagram, the AXI interface communicates with the control state machine through the write and read address channel. The IPIC interface resides in the AXI slave burst and communicates with the hardware accelerator which is the user slave IP (pg 158 IP AXI slave burst). 
+
+In the IP interconnect signals, the Bus2IP_CS, Bus2IP_RdCE and Bus2IP_WrCE are considered to be the IP interconnect control signals. The values driven on signals like Bus2IP_BE, Bus2IP_Addr and Bus2IP_Data are valid only when respective control signals are active. 
+
+The first section of signals in the top module consists of the I/O signals of the AXI slave burst IP core parameter. These are represented on the left signals (stemming from the axi interface) of the diagram. The second section, still in the top module, consists of the I/O signals of the AXI master burst IP. 
+
+The AXI master burst core is designed similarly to the slave burst core. The AXI4 bust communicates with the read and write controller. The user IP design connects to the controller through the AXI stream adapters. 
+
+![](figures/pg162_axi_master_burst.png)
