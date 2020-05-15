@@ -317,6 +317,7 @@ reg	[4:0]	sendBlockCounterX, sendBlockCounterY;
       // axi_writeAddress_counter_clockwise_offset;
     end
 
+
     else begin
   		case ( axiFSM_currentState )
   		`AXI_FSM_IDLE : begin
@@ -469,6 +470,185 @@ reg	[4:0]	sendBlockCounterX, sendBlockCounterY;
   		end
   		endcase
   	end
+
+    // pixel buffer
+    reg PIXEL_WIDTH = 32;
+    // write registers
+    reg                       pixelBuffer_writeEnable;
+    reg [11:0]                pixelBuffer_writeAddress;
+    reg [(32*4-1):0] pixelBuffer_writeData;
+    // read registers
+    reg                       pixelBuffer_readEnable;
+    reg [9:0]                 pixelBuffer_readAddress;
+    reg [(32*4-1):0] pixelBuffer_readData0;
+    reg [(32*4-1):0] pixelBuffer_readData1;
+    reg [(32*4-1):0] pixelBuffer_readData2;
+    reg [(32*4-1):0] pixelBuffer_readData3;
+
+    // indicator for reading one pixel from each block memory. or we reading
+    // all pixels from the same block memory.
+    reg	[3:0]			pixelBuffer_readDataSelect;
+    // indicator for telling if the pixels that we read should be sent out in a
+    // straight order or reverse order.
+    reg				pixelBuffer_readDataOrder;
+    // this is only used when doing horizontal and vertical flips or copy.
+    reg 	[1:0]			pixelBuffer_readAddress_subCounter;
+
+    //////////////////////////////////////////
+    // input data
+    //////////////////////////////////////////
+
+    reg bus2ip_mstrd_src_rdy_n;
+    reg bus2ip_mstrd_d = 1;
+    reg pixel_Buffer_writeData;
+
+    always_ff @(posedge Clk)
+      if(!ResetL) begin
+        pixelBuffer_writeEnable <= 0;
+        pixelBuffer_writeAddress <= 0;
+        pixelBuffer_writeData <= 0;
+      end
+      else begin
+
+        if(axiFSM_currentState == `AXI_FSM_IDLE) begin
+          pixelBuffer_writeEnable <= 0;
+          pixelBuffer_writeAddress <= 0;
+          pixelBuffer_writeData <= 0;
+        end
+
+        else if (axiFSM_currentState == `AXI_FSM_SEND_READ_REQUEST1) begin
+          pixelBuffer_writeEnable <= 0;
+          case(RotationType)
+            `ROTATION_CMD_COPY: begin
+              pixelBuffer_writeAddress <=
+                axiFSM_readRequestCounter * `IMAGE_BLOCK_SIZE/4 - 1;
+              end
+          endcase
+          pixelBuffer_writeData <= 0;
+        end
+
+        else if (axiFSM_currentState == `AXI_FSM_WAIT_FOR_READ_CMPLT1) begin
+          if(!bus2ip_mstrd_src_rdy_n) begin
+            pixelBuffer_writeEnable <= 1;
+            case(RotationType)
+              `ROTATION_CMD_COPY: begin
+                pixelBuffer_writeAddress <= pixelBuffer_writeAddress + 1;
+              end
+            endcase
+            pixelBuffer_writeData <= bus2ip_mstrd_d;
+          end
+          else begin
+            pixelBuffer_writeEnable <= 0;
+            pixelBuffer_writeAddress <= pixelBuffer_writeAddress;
+            pixel_Buffer_writeData <= 0;
+          end
+        end
+
+        else begin
+          pixelBuffer_writeEnable <= 0;
+          pixelBuffer_writeAddress <= pixelBuffer_writeAddress;
+          pixelBuffer_writeData <= 0;
+        end
+      end
+
+      /////////////////////////////////////
+      // output data
+      /////////////////////////////////////
+      // default block size is 120 x 120 pixels (14400 pixels)
+      // generate suitable read address and config signals for reading the data
+      // back from the dual port memory.
+
+      always_ff @(posedge Clk)
+        if(!ResetL) begin
+          pixelBuffer_readAddress <= 0;
+          pixelBuffer_readDataSelect <= 0;
+          pixelBuffer_readDataOrder <= 0;
+        end
+        else begin
+          if(axiFSM_currentState == `AXI_FSM_IDLE) begin
+            pixelBuffer_readAddress <= 0;
+            pixelBuffer_readDataSelect <= 0;
+            pixelBuffer_readDataOrder <= 0;
+          end
+          else if ((axiFSM_prevState == `AXI_FSM_WAIT_FOR_READ_ACK1) &&
+                  bus2ip_mst_cmdack) begin
+              case (RotationType)
+                `ROTATION_CMD_COPY: begin
+                  pixelBuffer_readAddress <= axiFSM_writeRequestCounter
+                    *((`IMAGE_BLOCK_SIZE/4)/4 + axiFSM_writeRequestCounter/2);
+                  pixelBuffer_readDataSelect <= 4'hf;
+                  pixelBuffer_readDataOrder <= 0;
+                end
+              endcase
+          end
+
+          else if(pixelBuffer_readEnable &&
+            (!
+              (
+              (axiFSM_prevState == `AXI_FSM_WAIT_FOR_WRITE_ACK1) &&
+            (axiFSM_currentState == `AXI_FSM_WAIT_FOR_WRITE_CMPLT1)
+              )
+            )) begin
+
+            case(RotationType)
+              `ROTATION_CMD_COPY: begin
+              if(pixelBuffer_readAddress_subCounter == 2) begin
+                pixelBuffer_readAddress <= pixelBuffer_readAddress + 1;
+              end
+              else begin
+                pixelBuffer_readAddress <= pixelBuffer_readAddress;
+              end
+              pixelBuffer_readDataSelect <= 4'hf;
+              pixelBuffer_readDataOrder <= 0;
+              end
+            endcase
+
+            end
+            else begin
+              pixelBuffer_readAddress <= pixelBuffer_readAddress;
+              pixelBuffer_readDataSelect <= pixelBuffer_readDataSelect;
+              pixelBuffer_readDataOrder <= pixelBuffer_readDataOrder;
+              pixelBuffer_readAddress <= 0;
+              pixelBuffer_readDataSelect <= 0;
+              pixelBuffer_readDataOrder <= 0;
+            end
+          end
+
+      //////////////////////////////////////////
+      // read address
+      //////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
